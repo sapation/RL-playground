@@ -74,6 +74,16 @@ let rewardChartCtx = null;
 // Optimal path display state
 let showOptimalPathFlag = false;
 let optimalPath = null; // Array of {x,y}
+// Timing state
+let learningStartTime = null;
+let learningEndTime = null;
+let learningDurationMs = null;
+let pathComputeStartTime = null;
+let pathComputeDurationMs = null;
+
+// DOM timing displays
+const learningTimeDisplay = document.getElementById('learningTimeDisplay');
+const pathTimeDisplay = document.getElementById('pathTimeDisplay');
 
 // --- NEW: Explanation data state ---
 let explanations = null; // Will be loaded from JSON
@@ -178,78 +188,6 @@ function initializeCollapsibles() {
     });
 }
 // --- End NEW ---
-
-// --- Educational Explanations ---
-// REMOVED: explanations object definition moved to explanations.json
-
-// Helper function for MathJax rendering
-function renderMath(element) {
-    if (typeof renderMathInElement === 'function') {
-        try {
-            renderMathInElement(element, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\(', right: '\\)', display: false},
-                    {left: '\\[', right: '\\]', display: true}
-                ],
-                throwOnError : false
-            });
-        } catch (error) {
-            console.error("KaTeX rendering failed:", error);
-        }
-    } else {
-        console.warn("renderMathInElement function not found. KaTeX might not be loaded yet.");
-    }
-}
-
-// Update explanation text function
-// function updateExplanationText() {
-//     // Check if explanations are loaded
-//     if (!explanations) {
-//         console.warn("Explanations not loaded yet.");
-//         // explanationTitle.textContent = 'Loading Explanations...'; // Removed: Title is now static HTML
-//         algorithmExplanationDiv.innerHTML = '<p>Loading explanation content...</p>'; // Keep fallback content
-//         explorationExplanationDiv.innerHTML = '';
-//         return;
-//     }
-
-//     const algoKey = getSelectedAlgorithm();
-//     const strategyKey = getExplorationStrategy();
-
-//     const algoInfo = explanations.algorithms[algoKey];
-//     const strategyInfo = explanations.strategies[strategyKey];
-
-//     if (algoInfo) {
-//         // explanationTitle.textContent = `${algoInfo.title} Explanation`; // Removed: Title is now static HTML
-//         // Prepend the algorithm title before the explanation text
-//         algorithmExplanationDiv.innerHTML = `<h4>${algoInfo.title}</h4>${algoInfo.text}`;
-//     } else {
-//         // explanationTitle.textContent = 'Algorithm Explanation'; // Removed: Title is now static HTML
-//         algorithmExplanationDiv.innerHTML = '<h4>Algorithm Details</h4><p>Select an algorithm to see details.</p>';
-//     }
-
-//     if (algoKey === 'actor-critic') {
-//         explorationExplanationDiv.style.display = ''; // Ensure div is visible
-//         explorationExplanationDiv.innerHTML = `
-//             <h4>Policy-Based Exploration</h4>
-//             <p>Actor-Critic explores implicitly through its stochastic policy \\(\\pi(a|s)\\), which is typically derived from preferences \\(h(s,a)\\) using a softmax function:</p>
-//             $$ P(a|s) = \\frac{\\exp(\\beta h(s,a))}{\\sum_{a'} \\exp(\\beta h(s,a'))} $$
-//             <p>Actions with higher preferences are more likely, but all actions have a non-zero probability of being selected (unless \\(\\beta\\) is extremely high). Adjusting the Softmax Temperature \\(\\beta\\) controls the greediness of the policy and thus the degree of exploration.</p>
-//         `;
-//     } else {
-//         explorationExplanationDiv.style.display = ''; // Ensure div is visible
-//         if (strategyInfo) {
-//             explorationExplanationDiv.innerHTML = `<h4>${strategyInfo.title}</h4>` + strategyInfo.text;
-//         } else {
-//             explorationExplanationDiv.innerHTML = '';
-//         }
-//     }
-
-//     renderMath(algorithmExplanationDiv);
-//     renderMath(explorationExplanationDiv);
-// }
-// --- End Educational Explanations ---
 
 // --- Drawing Function ---
 function drawEverything() {
@@ -375,6 +313,8 @@ function updateActionProbabilityDisplay() {
 // --- Optimal Path Utilities ---
 function computeOptimalPathFromStart(maxSteps = gridSize * gridSize) {
     // Compute greedy path starting from `startPos` following current policy (getBestActions)
+    // Track path computation time
+    pathComputeStartTime = performance.now();
     const path = [];
     const visited = new Set();
     let current = { x: startPos.x, y: startPos.y };
@@ -406,6 +346,17 @@ function computeOptimalPathFromStart(maxSteps = gridSize * gridSize) {
         }
     }
 
+    return path;
+}
+
+// Wrap computeOptimalPathFromStart to measure time and update UI
+function computeOptimalPathFromStartTimed(maxSteps) {
+    const path = computeOptimalPathFromStart(maxSteps);
+    pathComputeDurationMs = performance.now() - pathComputeStartTime;
+    if (pathTimeDisplay) {
+        pathTimeDisplay.textContent = `${(pathComputeDurationMs.toFixed(2))} s`;
+    }
+    console.log(`Optimal path computed in ${pathComputeDurationMs.toFixed(1)} ms`);
     return path;
 }
 
@@ -550,7 +501,7 @@ function initializeRewardChart() {
             labels: [],
             datasets: [
                 {
-                    label: `Smoothed Reward (Avg over ${MOVING_AVERAGE_WINDOW} episodes)`,
+                    label: `Reward (Avg over ${MOVING_AVERAGE_WINDOW} episodes)`,
                     data: [],
                     borderColor: smoothedLineColor, // Use computed value
                     backgroundColor: smoothedBgColor, // Use computed value
@@ -560,7 +511,7 @@ function initializeRewardChart() {
                     order: 1
                 },
                 { // Dataset for raw episodic reward
-                    label: 'Raw Episodic Reward',
+                    label: 'Raw Episode Reward',
                     data: [],
                     borderColor: rawLineColor, // Use computed value
                     backgroundColor: rawBgColor, // Use computed value
@@ -739,11 +690,18 @@ function learningLoopStep() {
             // If a maximum number of episodes is set, stop when reached and show optimal path
             if (maxEpisode > 0 && episodeCounter >= maxEpisode) {
                 // Compute optimal path from start and show it
-                optimalPath = computeOptimalPathFromStart();
+                // Record learning end time before doing path compute
+                learningEndTime = performance.now();
+                learningDurationMs = learningEndTime - (learningStartTime || learningEndTime);
+                if (learningTimeDisplay) learningTimeDisplay.textContent = `${(learningDurationMs / 1000).toFixed(3)} s`;
+                console.log(`Reached max episodes (${maxEpisode}). Learning duration: ${learningDurationMs.toFixed(1)} ms`);
+
+                // Compute and time optimal path, then show it
+                optimalPath = computeOptimalPathFromStartTimed();
                 showOptimalPathFlag = true;
                 drawEverything();
+                // Stop learning (this will also set timers if needed)
                 stopLearning();
-                console.log(`Reached max episodes (${maxEpisode}). Stopping learning.`);
             }
             // --- End Episode End Logic ---
 
@@ -766,6 +724,12 @@ function learningLoopStep() {
 // --- Start/Stop/Reset Functions ---
 function startLearning() {
     if (!isLearning) {
+        // Start learning timer
+        learningStartTime = performance.now();
+        learningEndTime = null;
+        learningDurationMs = null;
+        if (learningTimeDisplay) learningTimeDisplay.textContent = 'running...';
+
         isLearning = true;
         if (learningInterval) clearInterval(learningInterval);
         learningInterval = setInterval(learningLoopStep, simulationSpeed);
@@ -781,6 +745,13 @@ function startLearning() {
 
 function stopLearning() {
     if (isLearning) {
+        // If learning was running, record elapsed time if not already set
+        if (learningStartTime && !learningEndTime) {
+            learningEndTime = performance.now();
+            learningDurationMs = learningEndTime - learningStartTime;
+            if (learningTimeDisplay) learningTimeDisplay.textContent = `${(learningDurationMs / 1000).toFixed(3)} s`;
+            console.log(`Learning duration: ${learningDurationMs.toFixed(1)} ms`);
+        }
         clearInterval(learningInterval);
         learningInterval = null;
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -1007,7 +978,7 @@ if (maxEpisodeSlider && maxEpisodeValueSpan) {
 // Show Optimal Path button
 if (showOptimalPathButton) {
     showOptimalPathButton.addEventListener('click', () => {
-        optimalPath = computeOptimalPathFromStart();
+        optimalPath = computeOptimalPathFromStartTimed();
         showOptimalPathFlag = true;
         drawEverything();
     });

@@ -126,7 +126,11 @@
             <div class="controls">
                  <button class="btn btn--primary" id="startButton">Start Learning</button>
                  <button class="btn btn--secondary" id="stopButton">Stop Learning</button>
-                  <button class="btn btn--secondary" id="showOptimalPathButton" title="Compute and display the current optimal path according to the learned policy">Show Optimal Path</button>
+                  <!-- <button class="btn btn--secondary" id="showOptimalPathButton" title="Compute">Show Optimal Path</button> -->
+                 <div class="status-lines" style="margin-top:8px;">
+                     <div>Training time: <span id="learningTimeDisplay">—</span></div>
+                     <div>Path compute time: <span id="pathTimeDisplay">—</span></div>
+                 </div>
             </div>
         </div>
 
