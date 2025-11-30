@@ -9,9 +9,7 @@ import {
     drawRewardText,
     setStepPenalty,
     initializeGridRewards,
-    drawPolicyArrows,
     interpolateProbColor,
-    drawSRVector,
     setGemRewardMagnitude,
     setBadStateRewardMagnitude,
     rewardMagnitudeGem as initialGemReward,
@@ -52,7 +50,6 @@ let episodeCounter = 0;
 let totalRewardForEpisode = 0;
 let episodicRewards = [];
 let smoothedEpisodicRewards = [];
-let episodeNumbers = [];
 const MOVING_AVERAGE_WINDOW = 20;
 const MAX_CHART_POINTS = 500;
 
@@ -60,7 +57,7 @@ let rewardChartInstance = null;
 let rewardChartCtx = null;
 
 let showOptimalPathFlag = false;
-let optimalPath = null; // Array of {x,y}
+let optimalPath = null;
 
 let learningStartTime = null;
 let learningEndTime = null;
@@ -167,17 +164,7 @@ function drawEverything() {
 
 function updateQValueOrPreferenceDisplay() {
     const currentState = `${agentPos.x},${agentPos.y}`;
-
-    if (qValueDisplayHeader) {
-        const algorithm = getSelectedAlgorithm();
-        if (algorithm === 'actor-critic') {
-            qValueDisplayHeader.textContent = 'Action Preferences h(s,a)';
-        } else if (algorithm === 'sr') {
-             qValueDisplayHeader.textContent = 'Estimated Q(s,a) [from SR]';
-        } else {
-            qValueDisplayHeader.textContent = 'Action Values Q(s,a)';
-        }
-    }
+    qValueDisplayHeader.textContent = 'Action Values Q(s,a)';
 
     const setDisplayValue = (spanElement, value) => {
         const numericValue = value !== undefined ? value : 0;
@@ -224,7 +211,7 @@ function computeOptimalPathFromStart(maxSteps = gridSize * gridSize) {
 
     for (let step = 0; step < Math.max(1, maxSteps); step++) {
         const key = `${current.x},${current.y}`;
-        if (visited.has(key)) break; // loop detected
+        if (visited.has(key)) break;
         visited.add(key);
         path.push({ x: current.x, y: current.y });
 
@@ -439,27 +426,27 @@ function initializeRewardChart() {
                          }
                     },
                     grid: {
-                        color: gridColor // Use computed value
+                        color: gridColor
                     }
                 },
                 y: {
                     title: {
                         display: true,
                         text: 'Total Reward',
-                        color: labelColor, // Use computed value
+                        color: labelColor,
                         font: {
                             size: chartFontSize,
                             weight: 'bold'
                         }
                     },
                     ticks: {
-                        color: labelColor, // Use computed value
+                        color: labelColor,
                         font: {
                            size: chartFontSize - 2
                         }
                    },
                     grid: {
-                        color: gridColor // Use computed value
+                        color: gridColor
                     }
                 }
             },
@@ -467,7 +454,7 @@ function initializeRewardChart() {
                 legend: {
                     position: 'top',
                     labels: {
-                        color: labelColor, // Use computed value
+                        color: labelColor,
                         font: {
                             size: chartFontSize
                         }
@@ -476,9 +463,9 @@ function initializeRewardChart() {
                 tooltip: {
                     mode: 'index',
                     intersect: false,
-                    backgroundColor: tooltipBg, // Use computed value
-                    titleColor: tooltipText, // Use computed value
-                    bodyColor: tooltipText, // Use computed value
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
                     titleFont: {
                         size: chartFontSize
                     },
@@ -700,8 +687,6 @@ function performReset(resetType) {
     if (resetType === 'full' || resetType === 'environment') {
         initializeGridRewards(gridSize);
         setStartPos({ x: 0, y: 0 }, gridSize);
-        showOptimalPathFlag = false;
-        optimalPath = null;
     }
 
     if (resetType === 'full' || resetType === 'agent') {
@@ -710,7 +695,6 @@ function performReset(resetType) {
         totalRewardForEpisode = 0;
         episodicRewards = [];
         smoothedEpisodicRewards = [];
-        episodeNumbers = [];
         initializeRewardChart();
     }
 
@@ -718,6 +702,9 @@ function performReset(resetType) {
     visualAgentPos = { ...agentPos };
     isAnimating = false;
     currentEpisodeSteps = 0;
+    showOptimalPathFlag = false;
+    optimalPath = null;
+    learningTimeDisplay.textContent = '-';
     drawEverything();
 }
 
